@@ -1,280 +1,222 @@
-# app/services/ollama_service.py - Enhanced Ollama service with LangChain integration
+# app/routers/chat.py - Enhanced chat router with conversation management
 
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from typing import Dict, Optional
+import uuid
 import asyncio
-import aiohttp
-import time
-from typing import Dict, List, Optional, AsyncGenerator
+import json
+from datetime import datetime
+
+from app.models.chat_models import (
+    ChatMessage, ChatResponse, Conversation, 
+    ConversationMessage, MessageRole
+)
+from app.services.ollama_service import OllamaService
 from app.config import settings
-from langchain_ollama import OllamaLLM
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain.callbacks.base import BaseCallbackHandler
 
-class StreamingCallbackHandler(BaseCallbackHandler):
-    """Custom callback handler for streaming responses"""
-    
-    def __init__(self):
-        self.tokens = []
-        
-    def on_llm_new_token(self, token: str, **kwargs) -> None:
-        self.tokens.append(token)
+# Create router
+router = APIRouter()
 
-class OllamaService:
+# Global conversation storage (in production, use Redis or database)
+# We'll improve this in later phases
+conversations: Dict[str, Conversation] = {}
+
+# Initialize services
+ollama_service = OllamaService()
+
+@router.post("/message", response_model=ChatResponse)
+async def chat_message(message: ChatMessage, background_tasks: BackgroundTasks):
     """
-    Enhanced Ollama service with async support and LangChain integration.
+    Send a message to the AI assistant.
     
-    This service handles:
-    - Basic chat completions
-    - Streaming responses
-    - Context-aware conversations
-    - Health monitoring
+    This endpoint handles:
+    - New conversations and existing conversation continuity
+    - Optional RAG integration (we'll implement this in Phase 3)
+    - Conversation history management
     - Performance tracking
     """
     
-    def __init__(self):
-        self.base_url = settings.OLLAMA_URL
-        self.default_model = settings.OLLAMA_MODEL
-        self.timeout = settings.OLLAMA_TIMEOUT
+    try:
+        # Generate session ID if not provided
+        session_id = message.session_id or str(uuid.uuid4())
         
-        # Initialize LangChain LLM
-        self.llm = OllamaLLM(
-            base_url=self.base_url,
-            model=self.default_model,
-            temperature=0.1,  # Low temperature for factual responses
-            top_p=0.9,
-            num_predict=2000,  # Max tokens to generate
-            stop=["Human:", "Assistant:", "\n\n---"]  # Stop sequences
+        # Get or create conversation
+        if session_id not in conversations:
+            conversations[session_id] = Conversation(session_id=session_id)
+        
+        conversation = conversations[session_id]
+        
+        # Add user message to conversation history
+        conversation.add_message(
+            role=MessageRole.USER,
+            content=message.message,
+            metadata={"timestamp": datetime.now().isoformat()}
         )
         
-        # Performance tracking
-        self.request_count = 0
-        self.total_response_time = 0.0
+        # Prepare conversation context for AI
+        conversation_context = conversation.get_context(max_messages=10)
         
-    async def health_check(self) -> str:
-        """Check if Ollama service is healthy"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        models = data.get("models", [])
-                        return f"✅ Healthy ({len(models)} models available)"
-                    else:
-                        return f"⚠️ Service responding but unhealthy (status: {response.status})"
-        except asyncio.TimeoutError:
-            return "⏱️ Service timeout - may be overloaded"
-        except Exception as e:
-            return f"❌ Service unavailable: {str(e)}"
-    
-    async def get_available_models(self) -> List[Dict[str, str]]:
-        """Get list of available Ollama models"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return [
-                            {
-                                "name": model["name"],
-                                "size": model.get("size", "unknown"),
-                                "modified": model.get("modified_at", "unknown")
-                            }
-                            for model in data.get("models", [])
-                        ]
-        except Exception as e:
-            print(f"Error fetching models: {e}")
-            return []
-    
-    def _prepare_system_prompt(self, use_rag: bool = False) -> str:
-        """Prepare system prompt based on context"""
-        if use_rag:
-            return """You are an AI research assistant specializing in academic literature analysis. 
-            You help users understand and explore peer-reviewed research papers from reputable journals.
-
-            Your responsibilities:
-            - Provide accurate, evidence-based answers using ONLY the provided context
-            - Always cite your sources with specific paper titles and DOIs when available  
-            - If information isn't in the provided context, clearly state this limitation
-            - Maintain academic rigor and avoid speculation
-            - Format responses clearly with proper citations
-            
-            Remember: You must ONLY use information from the provided research papers. 
-            Do not add information from your general knowledge."""
-        else:
-            return """You are a helpful AI assistant with expertise in academic research and analysis.
-            Provide clear, accurate, and well-structured responses.
-            When discussing academic topics, emphasize the importance of peer-reviewed sources."""
-    
-    async def chat_completion(
-        self,
-        messages: List[Dict[str, str]],
-        context: Optional[str] = None,
-        use_rag: bool = False,
-        model: Optional[str] = None,
-        temperature: float = 0.1
-    ) -> Dict[str, any]:
-        """
-        Generate a chat completion with optional RAG context.
+        # TODO: In Phase 3, we'll add RAG retrieval here
+        context = None
+        if message.use_rag:
+            # Placeholder for RAG integration
+            context = "RAG system not yet implemented - will be added in Phase 3"
         
-        Args:
-            messages: List of conversation messages
-            context: Retrieved context from RAG system
-            use_rag: Whether this is a RAG-enhanced query
-            model: Specific model to use (optional)
-            temperature: Response randomness (0.0 = deterministic)
-            
-        Returns:
-            Response with metadata
-        """
-        start_time = time.time()
+        # Generate AI response
+        ai_response = await ollama_service.chat_completion(
+            messages=conversation_context,
+            context=context,
+            use_rag=message.use_rag,
+            temperature=0.1  # Keep responses factual and consistent
+        )
         
-        try:
-            # Prepare the full prompt
-            system_prompt = self._prepare_system_prompt(use_rag)
-            
-            # Build the conversation
-            conversation = [{"role": "system", "content": system_prompt}]
-            
-            # Add RAG context if provided
-            if context and use_rag:
-                context_message = {
-                    "role": "system", 
-                    "content": f"""Here is the relevant research context to answer the user's question:
-
-                    RESEARCH CONTEXT:
-                    {context}
-                    
-                    Please answer the user's question based ONLY on this context. 
-                    Cite specific papers when making claims."""
-                }
-                conversation.append(context_message)
-            
-            # Add conversation history
-            conversation.extend(messages)
-            
-            # Update LLM settings if needed
-            if model and model != self.default_model:
-                self.llm.model = model
-            self.llm.temperature = temperature
-            
-            # Generate response using LangChain
-            formatted_messages = self._format_messages_for_langchain(conversation)
-            response_text = await self._async_generate(formatted_messages)
-            
-            # Calculate metrics
-            response_time = time.time() - start_time
-            self.request_count += 1
-            self.total_response_time += response_time
-            
-            return {
-                "response": response_text,
-                "model_used": f"ollama/{model or self.default_model}",
-                "response_time": response_time,
-                "tokens_estimated": len(response_text.split()) * 1.3,  # Rough estimate
-                "context_used": bool(context),
-                "status": "success"
+        # Add AI response to conversation history
+        conversation.add_message(
+            role=MessageRole.ASSISTANT,
+            content=ai_response["response"],
+            metadata={
+                "model_used": ai_response["model_used"],
+                "response_time": ai_response["response_time"],
+                "context_used": ai_response.get("context_used", False)
             }
-            
-        except Exception as e:
-            return {
-                "response": f"I apologize, but I encountered an error: {str(e)}",
-                "model_used": "error",
-                "response_time": time.time() - start_time,
-                "status": "error",
-                "error": str(e)
-            }
-    
-    def _format_messages_for_langchain(self, messages: List[Dict[str, str]]) -> str:
-        """Convert message format to a single prompt for LangChain"""
-        formatted_parts = []
+        )
         
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            
-            if role == "system":
-                formatted_parts.append(f"System: {content}")
-            elif role == "user":
-                formatted_parts.append(f"Human: {content}")
-            elif role == "assistant":
-                formatted_parts.append(f"Assistant: {content}")
+        # Generate conversation title if this is the first exchange
+        if len(conversation.messages) == 2 and not conversation.title:
+            background_tasks.add_task(
+                generate_conversation_title, 
+                session_id, 
+                message.message
+            )
         
-        formatted_parts.append("Assistant:")  # Prompt for response
-        return "\n\n".join(formatted_parts)
-    
-    async def _async_generate(self, prompt: str) -> str:
-        """Generate response asynchronously"""
-        loop = asyncio.get_event_loop()
-        # Run the synchronous LangChain call in a thread pool
-        response = await loop.run_in_executor(None, self.llm.invoke, prompt)
+        # Prepare response
+        response = ChatResponse(
+            response=ai_response["response"],
+            model_used=ai_response["model_used"], 
+            status="success",
+            session_id=session_id,
+            generation_time=ai_response["response_time"],
+            tokens_used=int(ai_response.get("tokens_estimated", 0))
+        )
+        
         return response
-    
-    async def stream_completion(
-        self,
-        messages: List[Dict[str, str]],
-        context: Optional[str] = None,
-        use_rag: bool = False
-    ) -> AsyncGenerator[str, None]:
-        """
-        Stream a chat completion token by token.
         
-        This is useful for real-time chat interfaces.
-        """
-        try:
-            # Prepare the prompt (similar to chat_completion)
-            system_prompt = self._prepare_system_prompt(use_rag)
-            conversation = [{"role": "system", "content": system_prompt}]
-            
-            if context and use_rag:
-                context_message = {
-                    "role": "system",
-                    "content": f"RESEARCH CONTEXT:\n{context}\n\nAnswer based only on this context."
-                }
-                conversation.append(context_message)
-                
-            conversation.extend(messages)
-            prompt = self._format_messages_for_langchain(conversation)
-            
-            # Use callback handler for streaming
-            callback_handler = StreamingCallbackHandler()
-            
-            # Generate with streaming (this is a simplified version - 
-            # real streaming would require more complex implementation)
-            response = await self._async_generate(prompt)
-            
-            # Simulate streaming by yielding words
-            words = response.split()
-            for word in words:
-                yield word + " "
-                await asyncio.sleep(0.05)  # Small delay for streaming effect
-                
-        except Exception as e:
-            yield f"Error: {str(e)}"
-    
-    def get_performance_stats(self) -> Dict[str, float]:
-        """Get service performance statistics"""
-        avg_response_time = (
-            self.total_response_time / self.request_count 
-            if self.request_count > 0 else 0
-        )
+    except Exception as e:
+        # Log error (in production, use proper logging)
+        print(f"Chat error: {str(e)}")
         
-        return {
-            "total_requests": self.request_count,
-            "average_response_time": round(avg_response_time, 3),
-            "total_response_time": round(self.total_response_time, 3)
-        }
-    
-    async def simple_query(self, query: str, model: Optional[str] = None) -> str:
-        """
-        Simple query method for quick testing (like your original function).
-        """
-        result = await self.chat_completion(
-            messages=[{"role": "user", "content": query}],
-            model=model
+        return ChatResponse(
+            response=f"I apologize, but I encountered an error: {str(e)}",
+            model_used="error",
+            status="error",
+            session_id=session_id or "unknown"
         )
-        return result["response"]
+
+@router.get("/conversations")
+async def list_conversations():
+    """Get list of all conversation sessions with metadata."""
+    
+    conversation_list = []
+    for session_id, conv in conversations.items():
+        conversation_list.append({
+            "session_id": session_id,
+            "title": conv.title or f"Conversation {session_id[:8]}...",
+            "message_count": len(conv.messages),
+            "created_at": conv.created_at.isoformat(),
+            "last_updated": conv.last_updated.isoformat(),
+            "last_message_preview": (
+                conv.messages[-1].content[:100] + "..." 
+                if conv.messages else "No messages"
+            )
+        })
+    
+    return {
+        "conversations": sorted(
+            conversation_list, 
+            key=lambda x: x["last_updated"], 
+            reverse=True
+        ),
+        "total_conversations": len(conversation_list)
+    }
+
+@router.get("/conversations/{session_id}")
+async def get_conversation(session_id: str):
+    """Get full conversation history for a session."""
+    
+    if session_id not in conversations:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    conversation = conversations[session_id]
+    
+    return {
+        "session_id": session_id,
+        "title": conversation.title,
+        "created_at": conversation.created_at.isoformat(),
+        "last_updated": conversation.last_updated.isoformat(),
+        "messages": [
+            {
+                "role": msg.role.value,
+                "content": msg.content,
+                "timestamp": msg.timestamp.isoformat(),
+                "metadata": msg.metadata
+            }
+            for msg in conversation.messages
+        ]
+    }
+
+@router.delete("/conversations/{session_id}")
+async def delete_conversation(session_id: str):
+    """Delete a conversation session."""
+    
+    if session_id not in conversations:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    del conversations[session_id]
+    
+    return {"message": f"Conversation {session_id} deleted successfully"}
+
+@router.get("/health")
+async def chat_service_health():
+    """Check health of chat-related services."""
+    
+    ollama_status = await ollama_service.health_check()
+    
+    return {
+        "chat_service": "✅ Healthy",
+        "ollama_service": ollama_status,
+        "active_conversations": len(conversations),
+        "performance": ollama_service.get_performance_stats(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+# Background task functions
+async def generate_conversation_title(session_id: str, first_message: str):
+    """
+    Generate a descriptive title for the conversation based on the first message.
+    This runs in the background to avoid slowing down the initial response.
+    """
+    try:
+        if session_id in conversations:
+            # Generate a title using AI
+            title_prompt = f"""Generate a short, descriptive title (maximum 6 words) for a conversation that starts with: "{first_message[:200]}"
+
+            Examples:
+            - "How does photosynthesis work?" → "Photosynthesis Process Explanation"
+            - "I need help with machine learning" → "Machine Learning Assistance"
+            - "What causes climate change?" → "Climate Change Causes"
+            
+            Title:"""
+            
+            title_response = await ollama_service.simple_query(title_prompt)
+            
+            # Clean up the title
+            title = title_response.strip().replace('"', '').replace("Title:", "").strip()
+            if len(title) > 50:  # Fallback if AI generates too long title
+                title = first_message[:47] + "..."
+            
+            conversations[session_id].title = title
+            
+    except Exception as e:
+        # Fallback title generation
+        conversations[session_id].title = first_message[:30] + "..." if len(first_message) > 30 else first_message
