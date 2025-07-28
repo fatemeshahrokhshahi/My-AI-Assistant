@@ -12,7 +12,9 @@ from app.models.chat_models import (
     ChatMessage, ChatResponse, Conversation, 
     ConversationMessage, MessageRole
 )
+# Fixed imports - add LangChainService
 from app.services.ollama_service import OllamaService
+from app.services.langchain_service import LangChainService
 from app.config import settings
 
 # Create router
@@ -22,8 +24,9 @@ router = APIRouter()
 # We'll improve this in later phases
 conversations: Dict[str, Conversation] = {}
 
-# Initialize services
+# Initialize services - both services now
 ollama_service = OllamaService()
+langchain_service = LangChainService()
 
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(message: ChatMessage, background_tasks: BackgroundTasks):
@@ -63,13 +66,22 @@ async def chat_message(message: ChatMessage, background_tasks: BackgroundTasks):
             # Placeholder for RAG integration
             context = "RAG system not yet implemented - will be added in Phase 3"
         
-        # Generate AI response
-        ai_response = await ollama_service.chat_completion(
-            messages=conversation_context,
-            context=context,
-            use_rag=message.use_rag,
-            temperature=0.1  # Keep responses factual and consistent
-        )
+        # Enhanced AI response using LangChain
+        if message.use_rag or len(conversation.messages) > 4:  # Use LangChain for complex conversations
+            ai_response = await langchain_service.chat_with_memory(
+                message=message.message,
+                session_id=session_id,
+                conversation_history=conversation.messages[:-1],  # Exclude the just-added user message
+                use_summary_memory=(len(conversation.messages) > 20)
+            )
+        else:
+            # Use basic Ollama service for simple queries
+            ai_response = await ollama_service.chat_completion(
+                messages=conversation_context,
+                context=context,
+                use_rag=message.use_rag,
+                temperature=0.1
+            )
         
         # Add AI response to conversation history
         conversation.add_message(
@@ -82,10 +94,10 @@ async def chat_message(message: ChatMessage, background_tasks: BackgroundTasks):
             }
         )
         
-        # Generate conversation title if this is the first exchange
+        # Generate conversation title if this is the first exchange (using LangChain)
         if len(conversation.messages) == 2 and not conversation.title:
             background_tasks.add_task(
-                generate_conversation_title, 
+                generate_conversation_title_langchain, 
                 session_id, 
                 message.message
             )
@@ -181,40 +193,28 @@ async def chat_service_health():
     """Check health of chat-related services."""
     
     ollama_status = await ollama_service.health_check()
+    langchain_status = await langchain_service.health_check()
     
     return {
         "chat_service": "✅ Healthy",
         "ollama_service": ollama_status,
+        "langchain_service": langchain_status,
         "active_conversations": len(conversations),
-        "performance": ollama_service.get_performance_stats(),
+        "performance": {
+            "ollama": ollama_service.get_performance_stats(),
+            "langchain": langchain_service.get_performance_stats()
+        },
         "timestamp": datetime.now().isoformat()
     }
 
 # Background task functions
-async def generate_conversation_title(session_id: str, first_message: str):
+async def generate_conversation_title_langchain(session_id: str, first_message: str):
     """
-    Generate a descriptive title for the conversation based on the first message.
-    This runs in the background to avoid slowing down the initial response.
+    Generate a conversation title using advanced LangChain capabilities.
     """
     try:
         if session_id in conversations:
-            # Generate a title using AI
-            title_prompt = f"""Generate a short, descriptive title (maximum 6 words) for a conversation that starts with: "{first_message[:200]}"
-
-            Examples:
-            - "How does photosynthesis work?" → "Photosynthesis Process Explanation"
-            - "I need help with machine learning" → "Machine Learning Assistance"
-            - "What causes climate change?" → "Climate Change Causes"
-            
-            Title:"""
-            
-            title_response = await ollama_service.simple_query(title_prompt)
-            
-            # Clean up the title
-            title = title_response.strip().replace('"', '').replace("Title:", "").strip()
-            if len(title) > 50:  # Fallback if AI generates too long title
-                title = first_message[:47] + "..."
-            
+            title = await langchain_service.generate_conversation_title(first_message)
             conversations[session_id].title = title
             
     except Exception as e:
