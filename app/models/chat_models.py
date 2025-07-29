@@ -1,11 +1,9 @@
-# app/models/chat_models.py - Enhanced models based on your original ones
-
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
-# === Enhanced versions of your original models ===
+
 
 class ChatMessage(BaseModel):
     """
@@ -47,7 +45,7 @@ class ChatResponse(BaseModel):
     tokens_used: Optional[int] = Field(None, description="Tokens used in generation")
     context_length: Optional[int] = Field(None, description="Length of retrieved context")
 
-# === New models for conversation management ===
+
 
 class MessageRole(str, Enum):
     """Define message roles in conversations"""
@@ -88,14 +86,14 @@ class Conversation(BaseModel):
             for msg in recent_messages
         ]
 
-# === Models for document/journal paper processing ===
+#Models for document/journal paper processing 
 
 class DocumentType(str, Enum):
     """Supported document types for journal papers"""
     PDF = "pdf"
     DOCX = "docx"
     TXT = "txt"
-    JSON = "json"  # For your existing Springer JSON datasets
+    JSON = "json"  
 
 class DocumentMetadata(BaseModel):
     """
@@ -109,7 +107,7 @@ class DocumentMetadata(BaseModel):
     processing_status: str = "pending"  # pending, processing, completed, failed
     chunk_count: Optional[int] = Field(None, description="Number of chunks created")
     
-    # Journal-specific metadata (matches your Springer data structure!)
+    # Journal-specific metadata (matches my Springer data structure!)
     title: Optional[str] = Field(None, description="Paper title")
     authors: List[str] = Field(default_factory=list, description="Paper authors")
     abstract: Optional[str] = Field(None, description="Paper abstract")
@@ -131,14 +129,24 @@ class DocumentChunk(BaseModel):
     end_char: int
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-# === RAG System Models ===
+#RAG System Models
 
 class RAGQuery(BaseModel):
-    """Query for the RAG system to search journal papers"""
-    query: str = Field(..., min_length=1, description="The research question")
-    k: int = Field(5, ge=1, le=20, description="Number of papers to retrieve")
-    similarity_threshold: float = Field(0.7, ge=0.0, le=1.0, description="Minimum similarity score")
-    filter_by_source: Optional[str] = Field(None, description="Filter by publisher (e.g., 'Springer')")
+    """Model for RAG system queries"""
+    query: str = Field(..., description="The question to ask the knowledge base")
+    k: Optional[int] = Field(5, description="Number of relevant documents to retrieve")
+    similarity_threshold: Optional[float] = Field(0.7, description="Minimum similarity score for relevance")
+    filter_metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata filters")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "query": "What is artificial intelligence?",
+                "k": 5,
+                "similarity_threshold": 0.5,
+                "filter_metadata": {"source": "Springer"}
+            }
+        }
 
 class RAGResult(BaseModel):
     """Result from RAG retrieval of journal papers"""
@@ -159,7 +167,7 @@ class RAGResponse(BaseModel):
     generation_time: float
     confidence_score: Optional[float] = Field(None, description="AI confidence in the answer")
 
-# === System Status Models (enhanced versions of your original endpoints) ===
+#System Status Models 
 
 class SystemHealth(BaseModel):
     """Enhanced version of your original health check"""

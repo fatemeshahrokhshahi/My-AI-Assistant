@@ -1,15 +1,11 @@
-# app/main.py - Enhanced main application (replaces your original main.py)
-
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-
-# Import your enhanced configuration and routers
 from app.config import settings, print_startup_info
-from app.routers import chat
+from app.routers import chat, rag
 
 # Create FastAPI app with enhanced configuration
 app = FastAPI(
@@ -23,14 +19,15 @@ app = FastAPI(
 # Add CORS middleware for web frontend compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for your specific needs in production
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include your enhanced chat router
+# Include my enhanced chat router and RAG system
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Enhanced Chat"])
+app.include_router(rag.router, prefix="/api/v1/rag", tags=["RAG System"])
 
 @app.get("/")
 async def root():
@@ -64,10 +61,10 @@ async def root():
             "Check system health: GET /api/v1/chat/health"
         ],
         "coming_soon": [
-            "📄 Document upload and processing",
-            "🔍 RAG-powered journal paper queries",
-            "🧮 Vector database integration",
-            "📊 Citation and source tracking"
+            "📄 Document upload and processing ✅ READY!",
+            "🔍 RAG-powered journal paper queries ✅ READY!",
+            "🧮 Vector database integration ✅ READY!",
+            "📊 Citation and source tracking ✅ READY!"
         ]
     }
 
@@ -131,7 +128,6 @@ async def version_info():
         }
     }
 
-# Keep compatibility with your original endpoints (but enhanced)
 @app.get("/test") 
 async def legacy_test_endpoint():
     """

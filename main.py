@@ -1,5 +1,3 @@
-# Clean main.py - Working AI Assistant with Ollama
-
 from dotenv import load_dotenv
 load_dotenv()
 
