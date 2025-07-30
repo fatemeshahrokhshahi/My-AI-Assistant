@@ -150,9 +150,9 @@ Each paper includes:
 ### **Data Location**
 ```
 📁 data/
-├── 📄 manipulated_springer_dataset.json  # 229 academic papers
+├── 📄 merged_dataset.json                # 229 academic papers
 ├── 📁 vectorstore/                       # ChromaDB embeddings (auto-generated)
-└── 📁 uploads/                          # Document upload staging
+└── 📁 uploads/                           # Document upload staging
 ```
 
 ---
@@ -240,7 +240,7 @@ graph LR
 - 🎯 **Large Language Models** and reasoning enhancement
 - 🎯 **RAG Systems** and document-based AI applications  
 - 🎯 **Domain Clustering** and knowledge organization
-- 🎯 **Chain of Logic** methodology (21.44% improvement over Chain of Thought)
+
 
 ### **Publications & Projects**
 - **Chain of Logic for LLM Reasoning Enhancement** - Novel prompting methodology
@@ -290,7 +290,7 @@ python app/main.py             # Terminal 2
 ```
 
 ### **Dataset Setup**
-The repository includes the complete Springer dataset (`data/manipulated_springer_dataset.json`). The system will automatically process and index papers when you:
+The repository includes the complete Springer dataset (`data/merged_dataset.json`). The system will automatically process and index papers when you:
 
 1. **Upload via API**: Use `/api/v1/rag/add-springer-by-upload` endpoint
 2. **Auto-processing**: ChromaDB embeddings are generated automatically
