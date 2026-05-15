@@ -17,7 +17,7 @@
 This repository demonstrates a **complete AI development journey** from a basic chatbot to a sophisticated **Retrieval-Augmented Generation (RAG) system** capable of intelligently querying 229+ academic research papers. Each phase represents significant learning milestones and advanced technical implementations.
 
 ### 🏆 **Final Achievement: Advanced RAG System**
-- ✅ **229 Springer Research Papers** indexed and searchable
+- ✅ **512 Springer Research Papers** indexed and searchable
 - ✅ **Intelligent Q&A System** with source citations and DOI links
 - ✅ **Sub-second retrieval** performance with vector similarity search
 - ✅ **Production-ready architecture** with FastAPI + LangChain + ChromaDB
