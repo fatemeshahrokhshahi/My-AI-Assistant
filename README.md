@@ -135,7 +135,7 @@ POST /api/v1/rag/query
 
 ### **Academic Paper Collection**
 - **Source**: Springer Academic Publishing
-- **Papers**: 229 peer-reviewed research articles
+- **Papers**: 500+ peer-reviewed research articles
 - **Domains**: Artificial Intelligence, Machine Learning, Healthcare AI, Computer Vision, NLP, Software Engineering
 - **Format**: Structured JSON with complete metadata
 - **Processing**: Custom pipeline for academic paper parsing and indexing
@@ -150,7 +150,7 @@ Each paper includes:
 ### **Data Location**
 ```
 📁 data/
-├── 📄 merged_dataset.json                # 229 academic papers
+├── 📄 merged_dataset.json                # academic papers
 ├── 📁 vectorstore/                       # ChromaDB embeddings (auto-generated)
 └── 📁 uploads/                           # Document upload staging
 ```
