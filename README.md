@@ -123,7 +123,7 @@ POST /api/v1/rag/query
 - ✅ **Vector database implementation** (ChromaDB)
 - ✅ **Document processing pipeline** (PDF, JSON, TXT)
 - ✅ **Semantic search with embeddings** (sentence-transformers)
-- ✅ **Academic dataset integration** (229 Springer papers)
+- ✅ **Academic dataset integration** (Springer papers)
 - ✅ **Intelligent Q&A with citations** (RAG methodology)
 - ✅ **Production performance** (sub-second retrieval)
 
@@ -192,7 +192,7 @@ graph LR
 |--------|-------------|------------------|
 | **Query Response Time** | < 2 seconds | < 5 seconds |
 | **Retrieval Accuracy** | 0.4-0.8 similarity | > 0.3 relevant |
-| **Document Processing** | 229 papers/batch | Varies |
+| **Document Processing** | papers/batch | Varies |
 | **Concurrent Users** | 50+ (FastAPI async) | 10-100 |
 | **Memory Usage** | < 2GB | < 4GB |
 
