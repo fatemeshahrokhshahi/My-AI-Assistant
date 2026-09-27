@@ -38,7 +38,7 @@ This repository demonstrates a **complete AI development journey** from a basic 
 ## 🎖️ **Major Accomplishments**
 
 ### **🔬 Academic Research Integration**
-- **229 Springer research papers** successfully indexed
+- **Springer research papers** successfully indexed
 - **Comprehensive metadata extraction**: DOI, abstracts, keywords, authors
 - **Multi-domain coverage**: AI/ML, Healthcare, Computer Vision, NLP, Software Engineering
 - **Professional citation system** with source attribution
